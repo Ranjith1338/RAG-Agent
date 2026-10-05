@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>College FAQ RAG Agent</title>
+  <style>
+    :root { color-scheme: light; font-family: Segoe UI, Arial, sans-serif; }
+    body { margin: 0; background: #f3f6fb; color: #172033; }
+    .shell { max-width: 840px; margin: 48px auto; padding: 0 20px; }
+    .card { background: white; border-radius: 16px; box-shadow: 0 8px 30px #17203318; padding: 28px; }
+    h1 { margin: 0 0 8px; color: #123b72; }
+    .subtitle { margin: 0 0 24px; color: #536176; }
+    .chat { min-height: 300px; max-height: 52vh; overflow-y: auto; border: 1px solid #dce4ef; border-radius: 12px; padding: 16px; }
+    .message { margin: 10px 0; padding: 12px 14px; border-radius: 12px; white-space: pre-wrap; line-height: 1.5; }
+    .user { background: #eaf2ff; margin-left: 12%; }
+    .agent { background: #f4f5f7; margin-right: 12%; }
+    form { display: flex; gap: 10px; margin-top: 16px; }
+    input { flex: 1; border: 1px solid #bac8da; border-radius: 10px; padding: 13px; font-size: 16px; }
+    button { border: 0; border-radius: 10px; padding: 0 22px; background: #1769aa; color: white; font-weight: 600; cursor: pointer; }
+    button:hover { background: #125588; }
+    .examples { margin-top: 16px; color: #536176; font-size: 14px; }
+    .examples button { background: transparent; color: #1769aa; padding: 0 8px; font-weight: 400; }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="card">
+      <h1>College FAQ RAG Agent</h1>
+      <p class="subtitle">Ask questions about admissions, academics, fees, accommodation, library services, and student support.</p>
+      <div id="chat" class="chat" aria-live="polite">
+        <div class="message agent">Hello! Ask me a question about the college.</div>
+      </div>
+      <form id="question-form">
+        <input id="question" autocomplete="off" placeholder="How do I pay my tuition fees?" aria-label="Your question">
+        <button type="submit">Ask</button>
+      </form>
+      <div class="examples">
+        Try:
+        <button type="button">How do I apply for admission?</button>
+        <button type="button">Where is the academic calendar?</button>
+        <button type="button">What are the library hours?</button>
+      </div>
+    </section>
+  </main>
+  <script>
+    const faqs = [
+      ["ADM-001", "How do I apply for admission?", "Submit the online application form with the required academic documents before the published deadline. The admissions office will email the next steps.", "application admission apply documents deadline"],
+      ["ADM-002", "What documents are required for admission?", "Applicants generally need academic transcripts, a government identity document, passport photographs, and proof of payment. Check the current admission notice for programme-specific requirements.", "documents transcript identity requirements"],
+      ["ACA-001", "How can I register for courses?", "Log in to the student portal during the registration period, select eligible courses, and submit the registration for adviser approval.", "course registration student portal subjects enrolment"],
+      ["ACA-002", "Where can I find the academic calendar?", "The current academic calendar is published on the college website and student portal. It includes registration, examination, holiday, and result-release dates.", "academic calendar semester exams holidays"],
+      ["FEE-001", "How do I pay my tuition fees?", "Use the approved payment channel listed on the college website or student portal, then retain the receipt and confirm that the payment appears on your student account.", "fees tuition payment receipt"],
+      ["LIB-001", "What are the library opening hours?", "The library is open Monday to Saturday during the semester. Check the library noticeboard or website for the current hours and holiday changes.", "library opening hours books study"],
+      ["HOS-001", "How do I apply for hostel accommodation?", "Complete the accommodation request in the student portal before the housing deadline. Places are allocated subject to availability and college policy.", "hostel housing accommodation rooms"],
+      ["SUP-001", "Who can I contact for student support?", "Contact the student affairs or academic office through the official college email or phone number published on the college website.", "support student affairs counselling help"]
+    ];
+    const stopWords = new Set("a an and are be for how i in is of on or the to what when where which who".split(" "));
+    const tokens = text => new Set((text.toLowerCase().match(/[a-z0-9]+/g) || []).filter(t => !stopWords.has(t)));
+    function answer(query) {
+      const q = tokens(query);
+      if (!q.size) return "Please enter a question.";
+      const ranked = faqs.map(([id, question, response, keywords]) => {
+        const qt = tokens(question), kt = tokens(keywords), at = tokens(response);
+        let score = [...q].filter(t => qt.has(t)).length * 4;
+        score += [...q].filter(t => kt.has(t)).length * 3;
+        score += [...q].filter(t => at.has(t)).length * 0.5;
+        if (question.toLowerCase().includes(query.toLowerCase())) score += 2;
+        return { id, response, score };
+      }).filter(item => item.score > 0).sort((a, b) => b.score - a.score);
+      if (!ranked.length || ranked[0].score < 1.5)
+        return "I could not find that in the college FAQ database. Please contact the college office for an official answer.";
+      return `${ranked[0].response}\n\nSource: ${ranked.filter(item => item.score >= 1.5).map(item => item.id).join(", ")}`;
+    }
+    const chat = document.querySelector("#chat");
+    const input = document.querySelector("#question");
+    function ask(question) {
+      const text = question.trim();
+      if (!text) return;
+      chat.insertAdjacentHTML("beforeend", `<div class="message user">${text.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</div>`);
+      chat.insertAdjacentHTML("beforeend", `<div class="message agent">${answer(text).replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</div>`);
+      chat.lastElementChild.scrollIntoView({ behavior: "smooth" });
+      input.value = "";
+      input.focus();
+    }
+    document.querySelector("#question-form").addEventListener("submit", event => { event.preventDefault(); ask(input.value); });
+    document.querySelectorAll(".examples button").forEach(button => button.addEventListener("click", () => ask(button.textContent)));
+  </script>
+</body>
+</html>
